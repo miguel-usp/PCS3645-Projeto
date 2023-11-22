@@ -1,4 +1,5 @@
 #include <ESP8266WiFi.h>
+#include <WiFiClient.h>
 #include <ESP8266HTTPClient.h>
 #include <Arduino_JSON.h>
 extern "C" {
@@ -13,7 +14,7 @@ const char* password = "miguel314";  //Enter Password here
 const int SERIALBAUD = 9600;
 
 // Variables
-std::vector<char*> cars;
+std::vector<String> cars;
 int current_cars = 0;
 
 void setup() {
@@ -37,7 +38,7 @@ void loop() {
 void cars_status() {
     int i=0;
     struct station_info *stat_info; 
-    struct ip_addr *IPaddress;
+    struct ip4_addr *IPaddress;
     IPAddress address;
     
     stat_info = wifi_softap_get_station_info();
@@ -52,17 +53,18 @@ void cars_status() {
         String response = httpGETRequest("http://" + address.toString());
         JSONVar responseJSON = JSON.parse(response);
 
-        int id = responseJSON["ID"].toInt();
-        cars[id] = address;
+        int id = (int)responseJSON["ID"];
+        cars[id] = address.toString();
 
         stat_info = STAILQ_NEXT(stat_info, next);
         i++;
     }
 }
 
-void httpGETRequest(String address) {
+String httpGETRequest(String address) {
+    WiFiClient wifiClient;
     HTTPClient http;
-    http.begin(address);
+    http.begin(wifiClient, address);
     int httpResponseCode = http.GET();
     String payload = "{}"; 
         
@@ -76,6 +78,6 @@ void httpGETRequest(String address) {
         Serial.println(httpResponseCode);
     }
 
-    http.end()
+    http.end();
     return payload;
 }

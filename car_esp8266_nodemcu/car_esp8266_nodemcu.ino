@@ -2,7 +2,7 @@
 #include <ESP8266WebServer.h>
 
 // Car ID
-const int ID = 0
+const int ID = 0;
 
 // PINS
 const int MA1 = 5;   // Define the pin to which the LED is connected
