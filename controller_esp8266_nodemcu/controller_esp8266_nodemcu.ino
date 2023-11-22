@@ -14,12 +14,12 @@ const char* password = "miguel314";  //Enter Password here
 const int SERIALBAUD = 9600;
 
 // Variables
-std::vector<String> cars;
-int current_cars = 0;
+std::vector<String> cars {"", "", "", ""};
+int current_devices = 0;
 
 void setup() {
     Serial.begin(SERIALBAUD);
-    Serial.print("Setting AP (Access Point)…");
+    Serial.println("Setting AP (Access Point)…");
     WiFi.softAP(ssid, password);
     IPAddress IP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
@@ -27,8 +27,8 @@ void setup() {
 }
 
 void loop() {
-    current_cars = WiFi.softAPgetStationNum();
-    if(current_cars != cars.size()) {
+    current_devices = WiFi.softAPgetStationNum();
+    if(current_devices != cars.size()) {
         cars_status();
     }
     
@@ -36,28 +36,46 @@ void loop() {
 }
 
 void cars_status() {
-    int i=0;
     struct station_info *stat_info; 
     struct ip4_addr *IPaddress;
     IPAddress address;
     
     stat_info = wifi_softap_get_station_info();
     
-    Serial.print("Total connected cars are = ");
-    Serial.println(current_cars);
+    Serial.print("Total connected devices are = ");
+    Serial.println(current_devices);
     
     while (stat_info != NULL) {
         IPaddress = &stat_info->ip;
         address = IPaddress->addr;
 
+        Serial.print("Device address is ");
+        Serial.println(address.toString());
+
         String response = httpGETRequest("http://" + address.toString());
+        
+        if(response == "{}") {
+          Serial.println("Non-car connected");
+          return;
+        }
+
+        Serial.println("Request done");
+        
         JSONVar responseJSON = JSON.parse(response);
 
         int id = (int)responseJSON["ID"];
+
+        Serial.println(address.toString());
+        
         cars[id] = address.toString();
 
+        Serial.println("Car ");
+        Serial.print(id);
+        Serial.print(" with IP ");
+        Serial.print(cars[id]);
+        Serial.println(" added to connected cars");
+
         stat_info = STAILQ_NEXT(stat_info, next);
-        i++;
     }
 }
 
@@ -72,6 +90,7 @@ String httpGETRequest(String address) {
         Serial.print("HTTP Response code: ");
         Serial.println(httpResponseCode);
         payload = http.getString();
+        Serial.println(payload);
     }
     else {
         Serial.print("Error code: ");

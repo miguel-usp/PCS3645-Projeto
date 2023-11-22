@@ -133,7 +133,7 @@ void loop() {
 }
 
 void handle_OnConnect() {
-    server.send(200, "text/plain", "Hello to the M&M car!");
+    server.send(200, "text/json", "{\"ID\": \"" + String(ID) + "\"}");
 }
 
 
