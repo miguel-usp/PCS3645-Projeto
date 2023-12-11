@@ -2,7 +2,7 @@
 
 #define MA1 3   // IN1
 #define MA2 9   // IN2
-#define MB1 10   // IN3
+#define MB1 5   // IN3
 #define MB2 11  // IN4
 #define BUILTIN_LED 13
 #define BTN 4
@@ -44,13 +44,18 @@ void setup() {
     pinMode(pin_S1, INPUT);
     pinMode(pin_S2, INPUT);
 
+    // Botão
+    pinMode(BTN, INPUT);
+
     // Setamos o pino do LED como saída e escrevemos baixo
     pinMode(BUILTIN_LED, OUTPUT);
     digitalWrite(BUILTIN_LED, LOW);
+
+    Serial.begin(9600);
 }
 
-#define DEFSPEED 175
-#define HALFSPEED 150
+#define DEFSPEED 150
+#define HALFSPEED 120
 #define LOWSPEED 0
 #define INFRAWHITE 0
 #define INFRABLACK 1
@@ -81,17 +86,26 @@ bool checkClick() {
     return false;
 }
 
+
+
+
 bool isturning = false;
-// 0 - Right
-// 1 - Left
-// 2 - Straight
-// 3 - Back
-int turningDirection = 3;
-int turningStep = 0;
-void followLine() {
+int pathIndex = -1; // index of current item in path
+int turningStep = 0; // step of the turning state machine
+bool followPath(int* path, int pathSize) {
+    // Directions:
+    // 0 - Right
+    // 1 - Left
+    // 2 - Straight
+    // 3 - Back
+    // returns true if it will continue the path
     bool s1_black = digitalRead(pin_S1) == INFRABLACK;
     bool s2_black = digitalRead(pin_S2) == INFRABLACK;
+    int turningDirection;
     if (isturning) {
+        turningDirection = path[pathIndex];
+        Serial.println(pathIndex);
+        Serial.println(turningDirection);
         if (turningDirection < 2) {
             // Turn to either side
             if (!s1_black && !s2_black) isturning = false;
@@ -122,18 +136,56 @@ void followLine() {
         }
     }
     if (!isturning) {
-        if (s1_black && s2_black) isturning = true;
+        if (s1_black && s2_black) {
+            setMotorForce(0, 0);
+            delay(200);
+            if (digitalRead(pin_S1) == INFRABLACK && digitalRead(pin_S2) == INFRABLACK) {
+                pathIndex += 1;
+                if (pathIndex >= pathSize) {
+                    pathIndex = -1;
+                    return false;
+                }
+                isturning = true;
+            }
+        }
         else setMotorForce(s1_black ? LOWSPEED : DEFSPEED, s2_black ? LOWSPEED : DEFSPEED);
     }
-    digitalWrite(BUILTIN_LED, isturning ? HIGH : LOW);
+    return true;
 }
 
+int* path = nullptr;
+int pathLen = 0;
+
+// Directions:
+// 0 - Right
+// 1 - Left
+// 2 - Straight
+// 3 - Back
 bool walking = false;
 void loop() {
-      if (checkClick()) {
+    if (checkClick()) {
+        for (int i = 0; i < 3; i++) {
+            digitalWrite(BUILTIN_LED, HIGH);
+            delay(200);
+            digitalWrite(BUILTIN_LED, LOW);
+            delay(800);
+        }
+
         walking = !walking;
         isturning = false;
-      }
-      if (walking) followLine();
-      else setMotorForce(0, 0);
+        // setMotorForce(walking ? DEFSPEED : 0, walking ? DEFSPEED : 0); 
+        turningStep = 0;
+        if (path != nullptr) free(path);
+        path = (int*)malloc(sizeof(int) * 5);
+        pathLen = 5;
+        path[0] = 1;
+        path[1] = 2;
+        path[2] = 0;
+        path[3] = 0;
+        path[4] = 1;
+    }
+    if (walking) walking = followPath(path, pathLen);
+    else setMotorForce(0, 0);
+    digitalWrite(BUILTIN_LED, walking ? HIGH : LOW);
+
 }

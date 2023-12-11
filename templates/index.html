@@ -1,0 +1,529 @@
+{%raw%}
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Miguelopolis - Controle de Rotas</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"
+        integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js"
+        integrity="sha384-BBtl+eGJRgqQAUMxJ7pMwbEyER4l1g+O15P+16Ep7Q9Q+zqX6gSbd85u4mG4QzX+"
+        crossorigin="anonymous"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <script src="https://kit.fontawesome.com/3abb62590f.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@svgdotjs/svg.js@latest/dist/svg.min.js"></script>
+
+    <style>
+        .circular-loader {
+            animation: rotate 1.5s linear infinite;
+            -webkit-transform-origin: center center;
+            transform-origin: center center;
+        }
+
+        .loader-path {
+            --path-radius: 20%;
+
+            animation: dash 3s ease-in-out infinite, color 6s ease-in-out infinite;
+            stroke-linecap: round;
+            r: var(--path-radius);
+            stroke-width: 10;
+            stroke: rgb(11, 94, 215);
+        }
+
+        @keyframes rotate {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes dash {
+            0% {
+                stroke-dasharray: calc(var(--path-radius) * pi * 1.5), 200%;
+                stroke-dashoffset: calc(var(--path-radius) * pi * -0.25);
+            }
+
+            50% {
+                stroke-dasharray: calc(var(--path-radius) * pi * 1/16), 200%;
+                stroke-dashoffset: calc(var(--path-radius) * pi * -31/32);
+            }
+
+            100% {
+                stroke-dasharray: calc(var(--path-radius) * pi * 1.5), 200%;
+                stroke-dashoffset: calc(var(--path-radius) * pi * -0.25);
+            }
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <div id="app" class="container d-flex flex-column">
+        <h2 class="mt-2 display-4 text-center">Miguelopolis - Controle de Rotas</h2>
+        <p class="display-6 text-center">Adicione suas rotas abaixo</p>
+        <select class="form-select mb-4" v-model="curVehicle">
+            <option v-for="v in vehicles" :key="v" :value="v-1">Veículo {{ v }}</option>
+        </select>
+
+        <div class="row">
+            <div class="col-md-6" style="min-height: 50vh">
+
+                <svg id="grid" width="100%" height="100%">
+                    <rect width="100%" height="100%" id="back" fill="white"></rect>
+                    <g class="circular-loader" v-if="loadingGrid">
+                        <circle class="loader-path" cx="50%" cy="50%" fill="none" />
+                    </g>
+                    <g v-else>
+                        <g v-for="b in branches">
+                            <line v-for="l in b.layers" :x1="b.node1.displayCx" :y1="b.node1.displayCy"
+                                :x2="b.node2.displayCx" :y2="b.node2.displayCy" :stroke-width="l.w"
+                                :stroke="`rgb(${l.c[0]}, ${l.c[1]}, ${l.c[2]})`" />
+                        </g>
+                        <g v-for="n in nodes">
+                            <circle v-for="l in n.layers" :cx="n.displayCx" :cy="n.displayCy" :r="l.rad"
+                                :stroke="`rgb(${l.c[0]}, ${l.c[1]}, ${l.c[2]})`" fill="white" stroke-width="3" />
+                        </g>
+                    </g>
+                </svg>
+            </div>
+            <div class="col-md-6">
+                <div class="route d-flex flex-column">
+                    <div class="card">
+                        <div class="card-body">
+                            <p class="h4 mb-0">
+                                Começando no nó
+                                <span class="badge bg-primary">
+                                    {{ startPosCars[curVehicle] }}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="btn btn-sm btn-outline-success my-2 ms-auto rounded-circle"
+                        @click="curDirections.unshift(0)">
+                        <i class="fa-solid fa-plus"></i>
+                    </div>
+
+                    <div class="route-el d-flex flex-column" v-for="de, di in curDirections">
+                        <div class="btn-group">
+                            <button v-for="i in [2,0,1,3]" :key="i" class="btn"
+                                :class="{'btn-outline-primary': de != i, 'btn-primary': de === i}"
+                                @click="curDirections[di] = i">
+                                <i class="fa-solid"
+                                    :class="'fa-arrow-' + ['right', 'up', 'left', 'down'][i] + '-long'"></i>
+                            </button>
+                            <button class="btn btn-outline-danger flex-grow-0" @click="curDirections.splice(di, 1)"
+                                v-if="curDirections.length != 1">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                        <div class="d-flex">
+
+                            <span class="badge bg-danger rounded-circle align-self-start my-auto"
+                                v-if="di == curRouteErrPos">!</span>
+                            <div class="btn btn-sm btn-outline-success my-2 ms-auto rounded-circle"
+                                @click="curDirections.splice(di + 1, 0, 0)">
+                                <i class="fa-solid fa-plus"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button class="btn btn-outline-success mt-4" @click="addRouteQueue">Adicionar</button>
+        <div class="card my-3">
+            <div class="card-header">
+                <h4 class="mb-0">Rotas</h4>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Veículo</th>
+                            <th scope="col">Início</th>
+                            <th scope="col">Passos</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="r in routeQueue">
+                            <th scope="row">{{ r.vehicle }}</th>
+                            <td>{{ r.startPos}}</td>
+                            <td>
+                                <span v-for="d in r.directions" class="badge bg-primary me-2">
+                                    <i class="fa-solid"
+                                        :class="'fa-arrow-' + ['right', 'up', 'left', 'down'][d] + '-long'"></i>
+                                </span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const Direction = {
+            RIGHT: 0,
+            UP: 1,
+            LEFT: 2,
+            DOWN: 3
+        };
+
+        GRID_ROWS = 5;
+        GRID_COLS = 6;
+
+
+        GRADIENT_START = [255, 15, 123];
+        GRADIENT_END = [248, 155, 41];
+
+        DEFRAD = 10;
+        DEFWIDTH = 5;
+        DEFCOLOR = [0, 0, 0];
+        MINRAD = 5;
+        MINWIDTH = 3;
+        var getStartRad = l => 20 - 10 * Math.pow(2, - l);
+        var getStartWidth = l => 10 - 5 * Math.pow(2, - l);
+        var getMeasAt = (s, p, min) => (s - min) * Math.pow(2, (1 - p) / 4) + min;
+
+        class Node {
+            constructor(cx, cy) {
+                this.directions = {};
+                this.directions[Direction.RIGHT] = null;
+                this.directions[Direction.UP] = null;
+                this.directions[Direction.LEFT] = null;
+                this.directions[Direction.DOWN] = null;
+                this.cx = cx;
+                this.cy = cy;
+                this.layers = [{
+                    rad: 15,
+                    c: [0, 0, 255],
+                }];
+            }
+
+            setDirection(direction, branch) {
+                this.directions[direction] = branch;
+            }
+
+            getDirection(direction) {
+                return this.directions[direction];
+            }
+
+            rescale(boxX, boxY, boxW, boxH) {
+                this.displayCx = boxX + boxW * this.cx / (GRID_COLS + 1);
+                this.displayCy = boxY + boxH * this.cy / (GRID_ROWS + 1);
+            }
+
+            isEnd() {
+                return Object.values(this.directions).filter(d => d != null).length === 1;
+            }
+
+            getNodeInDirection(direction) {
+                return this.directions[direction].getOtherNode(this);
+            }
+
+            setStyles(route) {
+                let defl = [{
+                    rad: DEFRAD,
+                    c: DEFCOLOR,
+                }];
+                if (!route) {
+                    this.layers = defl;
+                    return;
+                }
+                let sr = getStartRad(route.length);
+                let layers = [];
+                route.forEach((item, index) => {
+                    if (item === this) layers.push({
+                        rad: getMeasAt(sr, index, MINRAD),
+                        c: GRADIENT_START.map((v, i) => v + (GRADIENT_END[i] - v) * index / (route.length - 1)),
+                    });
+                });
+                if (layers.length === 0) layers = defl;
+                this.layers = layers;
+            }
+        }
+
+        class Branch {
+            constructor(node1, direction1, node2, direction2) {
+                this.node1 = node1;
+                this.direction1 = direction1;
+                this.node2 = node2;
+                this.direction2 = direction2;
+                node1.setDirection(direction1, this);
+                node2.setDirection(direction2, this);
+                this.layers = [{
+                    w: 5,
+                    c: [0, 0, 255],
+                }];
+            }
+
+            getOtherNode(node) {
+                if (node === this.node1) return this.node2;
+                if (node === this.node2) return this.node1;
+                return null;
+            }
+
+            setStyles(route) {
+                let defl = [{
+                    w: DEFWIDTH,
+                    c: DEFCOLOR,
+                }];
+                if (!route) {
+                    this.layers = defl;
+                    return;
+                }
+                let sw = getStartWidth(route.length);
+                let layers = [];
+                route.forEach((item, index) => {
+                    if (item === this) layers.push({
+                        w: getMeasAt(sw, index, MINWIDTH),
+                        c: GRADIENT_START.map((v, i) => v + (GRADIENT_END[i] - v) * index / (route.length - 1)),
+                    });
+                });
+                if (layers.length === 0) layers = defl;
+                this.layers = layers;
+            }
+        }
+
+        const app = Vue.createApp({
+            data() {
+                let nodes = [
+                    new Node(5, 1), // 0
+                    new Node(6, 1), // 1
+
+                    new Node(1, 3), // 2
+                    new Node(2, 3),
+                    new Node(4, 3),
+                    new Node(5, 3),
+                    new Node(6, 3), // 6
+
+                    new Node(1, 4), // 7 
+                    new Node(2, 4),
+                    new Node(4, 4),
+                    new Node(5, 4),
+                    new Node(6, 4), // 11
+
+                    new Node(2, 5), // 12
+                    new Node(4, 5),
+                    new Node(5, 5), // 14
+                ];
+                let branches = [];
+                for (let i = 2; i < 11; i++)
+                    if (i !== 6) branches.push(new Branch(nodes[i], Direction.RIGHT, nodes[i + 1], Direction.LEFT));
+                branches = branches.concat([
+                    new Branch(nodes[0], Direction.RIGHT, nodes[1], Direction.LEFT),
+                    new Branch(nodes[0], Direction.DOWN, nodes[5], Direction.UP),
+
+                    new Branch(nodes[3], Direction.DOWN, nodes[8], Direction.UP),
+                    new Branch(nodes[4], Direction.DOWN, nodes[9], Direction.UP),
+                    new Branch(nodes[5], Direction.DOWN, nodes[10], Direction.UP),
+
+                    new Branch(nodes[8], Direction.DOWN, nodes[12], Direction.UP),
+                    new Branch(nodes[9], Direction.DOWN, nodes[13], Direction.UP),
+                    new Branch(nodes[10], Direction.DOWN, nodes[14], Direction.UP),
+
+                    new Branch(nodes[3], Direction.UP, nodes[0], Direction.LEFT)
+                ]);
+                return {
+                    curVehicle: 0,
+                    vehicles: 2,
+                    curDirections: [1, 2, 2, 1, 2],
+                    directionLabels: {
+                        0: "Right",
+                        1: "Left",
+                        2: "Up",
+                        3: "Down",
+                    },
+                    lastDim: { w: null, h: null },
+                    loadingGrid: true,
+                    nodes,
+                    branches,
+                    routeQueue: [{ "vehicle": 0, "startPos": 14, "directions": [1, 2, 2, 1, 2] }],
+                    startPosCars: [
+                        14, 13
+                    ],
+                    curRoute: null,
+                    curRouteErrPos: null,
+                };
+            },
+            watch: {
+                curDirections: {
+                    handler() {
+                        this.calcRoute();
+                    },
+                    deep: true,
+                    immediate: true
+                },
+                curVehicle() {
+                    this.calcRoute();
+                }
+            },
+            methods: {
+                calcRoute() {
+                    let curNode = this.nodes[this.startPosCars[this.curVehicle]];
+                    route = [curNode];
+                    for (let i = 0; i < this.curDirections.length; i++) {
+                        let branch = curNode.getDirection(this.curDirections[i]);
+                        if (branch == null) {
+                            this.curRouteErrPos = i;
+                            this.curRoute = null;
+                            console.log("Error at " + i);
+                            this.updateGridStyles();
+                            return;
+                        }
+                        route = route.concat([branch, curNode = branch.getOtherNode(curNode)]);
+                    }
+                    this.curRoute = route;
+                    this.curRouteErrPos = null;
+                    this.updateGridStyles();
+                },
+                addRouteQueue() {
+                    this.routeQueue.push({
+                        vehicle: this.curVehicle,
+                        startPos: this.startPosCars[this.curVehicle],
+                        directions: this.curDirections,
+                    });
+                },
+                updateGridStyles() {
+                    for (let i = 0; i < this.branches.length; i++) this.branches[i].setStyles(this.curRoute);
+                    for (let i = 0; i < this.nodes.length; i++) this.nodes[i].setStyles(this.curRoute);
+                },
+                selectDir(directionIndex, direction) {
+                    console.log(directionIndex, direction);
+                    this.directions[this.curVehicle][directionIndex] = direction;
+                },
+                addDirection() {
+                    this.directions[this.curVehicle].push(null);
+                },
+                removeDirection(vehicle, directionIndex) {
+                    this.directions[vehicle].splice(directionIndex, 1);
+                },
+                updateGrid() {
+                    let back = document.querySelector("#grid #back");
+                    let w = back.getBoundingClientRect().width;
+                    let h = back.getBoundingClientRect().height;
+                    if (w === this.lastDim.w && h === this.lastDim.h && !(this.loadingGrid = false)) return;
+                    this.lastDim.w = w;
+                    this.lastDim.h = h;
+                    let containerSide = Math.min(w, h);
+                    for (let i = 0; i < this.nodes.length; i++)
+                        this.nodes[i].rescale((w - containerSide) / 2, (h - containerSide) / 2, containerSide, containerSide);
+                }
+            },
+            mounted() {
+                this.updateGrid();
+                window.addEventListener("resize", this.updateGrid);
+                setInterval(this.updateGrid, 200);
+            }
+        });
+
+        app.mount('#app');
+    </script>
+
+
+    <script>  // AUTORELOAD
+
+        let lastContent = {};
+        var filesToCheckCount = 0;
+        var verifiedFilesCount = 0;
+        var verificationFailed = false;
+
+        function connectionChecker() {
+            fetch(window.location.href).then((response) => {
+                if (response.status === 200) {
+                    console.log("Connection restored");
+                    verificationFailed = false;
+                    location.reload();
+                } else {
+                    console.log("Connection failed");
+                }
+            }).catch((error) => {
+                console.log("Connection failed");
+                setTimeout(connectionChecker, 1000);
+            });
+        }
+
+        function checkFileChanged(file) {
+            fetch(file).then((response) => {
+                if (verificationFailed) return;
+                response.text().then((content) => {
+                    if (lastContent[file] == null) {
+                        lastContent[file] = content;
+                        verifiedFilesCount++;
+                    } else if (lastContent[file] != content) {
+                        console.log("Reloading because " + file + " changed");
+                        location.reload();
+                        clearInterval(fileChangedInterval);
+                    } else {
+                        verifiedFilesCount++;
+                    }
+                    if (verifiedFilesCount === filesToCheckCount) {
+                        setTimeout(checkFilesChanged, 250 - (new Date() - now));
+                    }
+                }).catch((error) => {
+                    if (verificationFailed) return;
+                    console.log("Error checking " + file + ": " + error);
+                    verificationFailed = true;
+                    console.log("Waiting for connection before reloading");
+                    connectionChecker();
+                });
+            }).catch((error) => {
+                if (verificationFailed) return;
+                console.log("Error checking " + file + ": " + error);
+                verificationFailed = true;
+                console.log("Waiting for connection before reloading");
+                connectionChecker();
+            });
+        }
+
+        function checkFilesChanged(loop) {
+            now = new Date();
+            verifiedFilesCount = 0;
+            filesToCheckCount = filesToCheck.length;
+            for (const file of filesToCheck) {
+                checkFileChanged(file);
+            }
+        }
+
+        const filesToCheck = [];
+        {
+            const head = document.getElementsByTagName("head")[0];
+            const scripts = head.getElementsByTagName("script");
+            const styles = head.getElementsByTagName("link");
+            for (let i = 0; i < scripts.length; i++) {
+                const script = scripts[i];
+                if (script.src) {
+                    filesToCheck.push(script.src);
+                }
+            }
+            for (let i = 0; i < styles.length; i++) {
+                const style = styles[i];
+                if (style.rel === "stylesheet" && style.href) {
+                    filesToCheck.push(style.href);
+                }
+            }
+            // Check scripts in the body
+            const body = document.getElementsByTagName("body")[0];
+            const bodyScripts = body.getElementsByTagName("script");
+            for (let i = 0; i < bodyScripts.length; i++) {
+                const script = bodyScripts[i];
+                if (script.src) {
+                    filesToCheck.push(script.src);
+                }
+            }
+            filesToCheck.push(window.location.href);
+        }
+        // fileChangedInterval = setInterval(checkFilesChanged, 250);
+        checkFilesChanged(true);
+
+    </script>
+
+</body>
+
+</html>
+
+{%endraw%}
