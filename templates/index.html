@@ -70,7 +70,7 @@
         </select>
 
         <div class="row">
-            <div class="col-md-6" style="min-height: 50vh">
+            <div class="col-md-8" style="min-height: 50vh">
 
                 <svg id="grid" width="100%" height="100%">
                     <rect width="100%" height="100%" id="back" fill="white"></rect>
@@ -90,7 +90,7 @@
                     </g>
                 </svg>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4 d-flex flex-column">
                 <div class="route d-flex flex-column">
                     <div class="card">
                         <div class="card-body">
@@ -132,12 +132,15 @@
                         </div>
                     </div>
                 </div>
+                <button class="btn btn-primary" @click="addRouteQueue">Adicionar</button>
             </div>
         </div>
-        <button class="btn btn-outline-success mt-4" @click="addRouteQueue">Adicionar</button>
         <div class="card my-3">
-            <div class="card-header">
+            <div class="card-header d-flex align-items-center">
                 <h4 class="mb-0">Rotas</h4>
+                <button class="btn btn-success ms-auto" @click="sendQueue">
+                    Enviar
+                </button>
             </div>
             <div class="card-body">
                 <table class="table">
@@ -190,6 +193,8 @@
         var getMeasAt = (s, p, min) => (s - min) * Math.pow(2, (1 - p) / 4) + min;
 
         class Node {
+            static lastId = 0;
+
             constructor(cx, cy) {
                 this.directions = {};
                 this.directions[Direction.RIGHT] = null;
@@ -202,6 +207,7 @@
                     rad: 15,
                     c: [0, 0, 255],
                 }];
+                this.id = Node.lastId++;
             }
 
             setDirection(direction, branch) {
@@ -267,6 +273,12 @@
                 return null;
             }
 
+            getOtherNodeInfo(node) {
+                if (node === this.node1) return { node: this.node2, direction: this.direction2 };
+                if (node === this.node2) return { node: this.node1, direction: this.direction1 };
+                return null;
+            }
+
             setStyles(route) {
                 let defl = [{
                     w: DEFWIDTH,
@@ -292,11 +304,12 @@
         const app = Vue.createApp({
             data() {
                 let nodes = [
-                    new Node(5, 1), // 0
-                    new Node(6, 1), // 1
-
-                    new Node(1, 3), // 2
+                    new Node(1, 3), // 0
                     new Node(2, 3),
+
+                    new Node(5, 1), // 2
+                    new Node(6, 1),
+
                     new Node(4, 3),
                     new Node(5, 3),
                     new Node(6, 3), // 6
@@ -312,22 +325,45 @@
                     new Node(5, 5), // 14
                 ];
                 let branches = [];
-                for (let i = 2; i < 11; i++)
-                    if (i !== 6) branches.push(new Branch(nodes[i], Direction.RIGHT, nodes[i + 1], Direction.LEFT));
                 branches = branches.concat([
-                    new Branch(nodes[0], Direction.RIGHT, nodes[1], Direction.LEFT),
-                    new Branch(nodes[0], Direction.DOWN, nodes[5], Direction.UP),
+                    new Branch(nodes[0], Direction.RIGHT, nodes[1], Direction.LEFT), // 1
+                    new Branch(nodes[1], Direction.UP, nodes[2], Direction.LEFT),
+                    new Branch(nodes[2], Direction.RIGHT, nodes[3], Direction.LEFT),
+                    new Branch(nodes[2], Direction.DOWN, nodes[5], Direction.UP),   // 4
+                    new Branch(nodes[1], Direction.RIGHT, nodes[4], Direction.LEFT),
+                    new Branch(nodes[4], Direction.RIGHT, nodes[5], Direction.LEFT), // 6
+                    new Branch(nodes[5], Direction.RIGHT, nodes[6], Direction.LEFT),
 
-                    new Branch(nodes[3], Direction.DOWN, nodes[8], Direction.UP),
+                    new Branch(nodes[1], Direction.DOWN, nodes[8], Direction.UP), // 8
                     new Branch(nodes[4], Direction.DOWN, nodes[9], Direction.UP),
-                    new Branch(nodes[5], Direction.DOWN, nodes[10], Direction.UP),
+                    new Branch(nodes[5], Direction.DOWN, nodes[10], Direction.UP), // 10
+
+                    new Branch(nodes[7], Direction.RIGHT, nodes[8], Direction.LEFT),
+                    new Branch(nodes[8], Direction.RIGHT, nodes[9], Direction.LEFT), // 12
+                    new Branch(nodes[9], Direction.RIGHT, nodes[10], Direction.LEFT),
+                    new Branch(nodes[10], Direction.RIGHT, nodes[11], Direction.LEFT), // 14
 
                     new Branch(nodes[8], Direction.DOWN, nodes[12], Direction.UP),
-                    new Branch(nodes[9], Direction.DOWN, nodes[13], Direction.UP),
+                    new Branch(nodes[9], Direction.DOWN, nodes[13], Direction.UP), // 16
                     new Branch(nodes[10], Direction.DOWN, nodes[14], Direction.UP),
-
-                    new Branch(nodes[3], Direction.UP, nodes[0], Direction.LEFT)
                 ]);
+
+                // show map
+                let p = '';
+                for (i in nodes) {
+                    let l = [];
+                    for (j in nodes[i].directions) {
+                        let b = nodes[i].directions[j];
+                        if (b == null) l.push('nullptr');
+                        else {
+                            let info = b.getOtherNodeInfo(nodes[i]);
+                            l.push(`&MapNodeDir{${info.node.id}, ${info.direction}}`);
+                        }
+                    }
+                    p += `{${l.join(', ')}},\n`;
+                }
+                console.log(`${p}`);
+
                 return {
                     curVehicle: 0,
                     vehicles: 2,
@@ -348,6 +384,7 @@
                     ],
                     curRoute: null,
                     curRouteErrPos: null,
+                    curRouteGoesToEnd: false,
                 };
             },
             watch: {
@@ -371,12 +408,14 @@
                         if (branch == null) {
                             this.curRouteErrPos = i;
                             this.curRoute = null;
+                            this.curRouteGoesToEnd = null;
                             console.log("Error at " + i);
                             this.updateGridStyles();
                             return;
                         }
                         route = route.concat([branch, curNode = branch.getOtherNode(curNode)]);
                     }
+                    this.curRouteGoesToEnd = curNode.isEnd();
                     this.curRoute = route;
                     this.curRouteErrPos = null;
                     this.updateGridStyles();
@@ -385,7 +424,26 @@
                     this.routeQueue.push({
                         vehicle: this.curVehicle,
                         startPos: this.startPosCars[this.curVehicle],
-                        directions: this.curDirections,
+                        directions: this.curDirections.concat([]),
+                    });
+                },
+                sendQueue() {
+                    // send the contents of the queue to the server at /dirs
+                    fetch("/dirs", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(this.routeQueue),
+                    }).then((response) => {
+                        if (response.status === 200) {
+                            console.log("Success");
+                            this.routeQueue = [];
+                        } else {
+                            console.log("Error: " + response.status);
+                        }
+                    }).catch((error) => {
+                        console.log("Error: " + error);
                     });
                 },
                 updateGridStyles() {

@@ -1,8 +1,12 @@
+import random
 from flask import Flask, render_template, request, jsonify
+import requests
 
 PAGE_PATH = 'index.html'
 
 app = Flask(__name__)
+
+VEHICLES_IPS = ['192.168.68.27']
 
 
 @app.route('/')
@@ -13,14 +17,15 @@ def index():
 @app.route('/dirs', methods=['POST'])
 def dirs():
     data = request.get_json()
-    if data is None or not isinstance(data, list):
-        return jsonify({'error': 'Invalid input. Expected a list of numbers in JSON format.'}), 400
+    if data is None:
+        return jsonify({'result': 'Error: no data provided'}), 400
+    for ri in data:
+        print(ri)
+        num_stall = random.randint(0, 4)
+        requests.post('http://' + VEHICLES_IPS[0] + '/dirs',
+                      data=f"{('s' * num_stall) + ''.join(map(str, ri['directions']))}")
 
-    # Process the list of numbers here
-    # For example, you can calculate the sum of the numbers
-    result = sum(data)
-
-    return jsonify({'result': result})
+    return jsonify({'result': 'OK'}), 200
 
 
 if __name__ == '__main__':
