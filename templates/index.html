@@ -429,12 +429,26 @@
                 },
                 sendQueue() {
                     // send the contents of the queue to the server at /dirs
+                    args = ""
+                    jsonArgs = JSON.parse(JSON.stringify(this.routeQueue))
+                    for(let i = 0; i < jsonArgs.length; i++) {
+                        let route = jsonArgs[i]
+                        args += route.vehicle + ","
+                        args += route.startPos + ","
+                        for(let j = 0; j < route.directions.length; j++) {
+                            let direction = route.directions[j]
+                            args += direction 
+                            if(j < route.directions.length - 1) args += ","
+                        }
+                        args += ";"
+                    }
+                    console.log(args)
                     fetch("/dirs", {
                         method: "POST",
                         headers: {
-                            "Content-Type": "application/json",
+                            "Content-Type": "plain/text",
                         },
-                        body: JSON.stringify(this.routeQueue),
+                        body: args,
                     }).then((response) => {
                         if (response.status === 200) {
                             console.log("Success");
